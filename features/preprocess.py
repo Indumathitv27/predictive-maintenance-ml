@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import logging
+from project_config import MODELS_DIR
 from project_config import (
     TRAIN_FILE, TEST_FILE, RUL_FILE,
     COLUMN_NAMES, PROCESSED_DATA_DIR,
@@ -44,17 +45,21 @@ def load_data() -> tuple:
 # ── Compute RUL for training data ─────────────────────────
 def compute_rul(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Computes Remaining Useful Life for each row in training data.
-    RUL = max cycle for that engine - current cycle.
-    Clips RUL at RUL_CLIP to focus on degradation phase.
+    Computes Remaining Useful Life for training data.
+    Uses piecewise linear RUL — flat at RUL_CLIP then
+    linearly decreasing. This is the standard approach
+    for NASA CMAPS dataset that improves generalization.
     """
     max_cycles = df.groupby("engine_id")["cycle"].max().reset_index()
     max_cycles.columns = ["engine_id", "max_cycle"]
     df = df.merge(max_cycles, on="engine_id")
     df["RUL"] = df["max_cycle"] - df["cycle"]
+
+    # Piecewise linear — cap early cycles at RUL_CLIP
+    # This focuses model on the degradation phase
     df["RUL"] = df["RUL"].clip(upper=RUL_CLIP)
     df = df.drop(columns=["max_cycle"])
-    logger.info(f"RUL computed and clipped at {RUL_CLIP}")
+    logger.info(f"Piecewise linear RUL computed, clipped at {RUL_CLIP}")
     return df
 
 
@@ -147,8 +152,7 @@ def normalize_features(train: pd.DataFrame,
 # ── Full preprocessing pipeline ────────────────────────────
 def run_preprocessing() -> tuple:
     """
-    Runs the complete preprocessing pipeline:
-    Load -> RUL -> Drop low variance -> Feature engineering -> Normalize
+    Runs the complete preprocessing pipeline.
     Returns train and test dataframes ready for modeling.
     """
     logger.info("Starting preprocessing pipeline")
@@ -166,28 +170,53 @@ def run_preprocessing() -> tuple:
     test["RUL"] = test["engine_id"].map(rul_map)
     test["RUL"] = test["RUL"].clip(upper=RUL_CLIP)
 
-    # Drop low variance sensors
+    # Drop low variance sensors from train
+    # Apply same column drops to test
+    sensor_cols_before = [c for c in train.columns
+                          if c.startswith("sensor")]
     train = drop_low_variance_sensors(train)
-    sensor_cols_kept = [c for c in train.columns if c.startswith("sensor")]
-    test = test[["engine_id", "cycle"] +
-                [c for c in test.columns
-                 if c in sensor_cols_kept or
-                 c in ["op_setting_1", "op_setting_2",
-                        "op_setting_3", "RUL"]]]
+    sensor_cols_after = [c for c in train.columns
+                         if c.startswith("sensor")]
+    dropped = set(sensor_cols_before) - set(sensor_cols_after)
+
+    # Drop same sensors from test
+    test = test.drop(
+        columns=[c for c in dropped if c in test.columns]
+    )
 
     # Feature engineering
     train = engineer_features(train)
     test = engineer_features(test)
 
-    # Normalize
+    # Save RUL before normalization
     train_rul = train["RUL"].copy()
     test_rul = test["RUL"].copy()
 
-    train, test, scaler, feature_cols = normalize_features(train, test)
+    # Normalize — fit on train ONLY
+    exclude = ["engine_id", "cycle", "RUL"]
+    feature_cols = [c for c in train.columns if c not in exclude]
 
-    # Restore RUL after normalization
-    train["RUL"] = train_rul
-    test["RUL"] = test_rul
+    # Clean infinities and NaNs
+    for df in [train, test]:
+        df[feature_cols] = df[feature_cols].replace(
+            [float('inf'), float('-inf')], float('nan')
+        )
+
+    train[feature_cols] = train[feature_cols].fillna(
+        train[feature_cols].median()
+    )
+    test[feature_cols] = test[feature_cols].fillna(
+        test[feature_cols].median()
+    )
+
+    from sklearn.preprocessing import MinMaxScaler
+    scaler = MinMaxScaler()
+    train[feature_cols] = scaler.fit_transform(train[feature_cols])
+    test[feature_cols] = scaler.transform(test[feature_cols])
+
+    # Restore RUL
+    train["RUL"] = train_rul.values
+    test["RUL"] = test_rul.values
 
     # Save processed data
     os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
@@ -200,5 +229,14 @@ def run_preprocessing() -> tuple:
         index=False
     )
 
-    logger.info("Preprocessing complete — files saved to data/processed/")
+    # Save scaler and feature cols for API use
+    import pickle
+    with open(os.path.join(MODELS_DIR, "scaler.pkl"), "wb") as f:
+        pickle.dump(scaler, f)
+    with open(
+        os.path.join(MODELS_DIR, "feature_cols.pkl"), "wb"
+    ) as f:
+        pickle.dump(feature_cols, f)
+
+    logger.info("Preprocessing complete — files saved")
     return train, test, scaler, feature_cols

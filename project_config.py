@@ -29,7 +29,8 @@ COLUMN_NAMES = [
 
 # Feature engineering settings
 WINDOW_SIZE = 30        # rolling window for moving averages
-RUL_CLIP = 125          # cap RUL at 125 cycles — engines degrade non-linearly
+RUL_CLIP = 130
+WINDOW_SIZE = 15         # cap RUL at 125 cycles — engines degrade non-linearly
 
 # Model settings
 TEST_SIZE = 0.2
