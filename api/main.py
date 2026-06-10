@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List
+from api.snowflake_logger import log_prediction, log_sensor_reading
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from project_config import MODELS_DIR, LOGS_DIR, PROCESSED_DATA_DIR
@@ -203,6 +204,16 @@ def predict_rul(reading: SensorReading):
             f"Prediction complete | engine_id={reading.engine_id} "
             f"| RUL={rul} | risk={risk_level}"
         )
+        
+        log_prediction(
+            engine_id=reading.engine_id,
+            cycle=reading.cycle,
+            predicted_rul=rul,
+            risk_level=risk_level,
+            recommendation=recommendation,
+            model_version="LightGBM-Optuna-v1.0"
+        )
+        log_sensor_reading(reading.dict())
 
         return PredictionResponse(
             engine_id=reading.engine_id,
