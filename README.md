@@ -40,23 +40,17 @@ Predicts how many cycles remain before a turbofan engine fails — enabling proa
 ---
 
 ## 🏗️ Architecture
-NASA CMAPS Dataset
-↓
-Feature Engineering (48 features)
-↓
-Model Training — RF, XGBoost, LightGBM
-↓
-Optuna Hyperparameter Tuning (50 trials)
-↓
-MLflow Experiment Tracking
-↓
-FastAPI REST Endpoint (/predict, /predict/batch)
-↓
-Snowflake — real-time prediction logging
-↓
-Streamlit Dashboard — fleet health monitoring
 
----
+| Stage | Component | What it does |
+|---|---|---|
+| 1️⃣ | **Data Ingestion** | NASA CMAPS FD001 — 20,631 training cycles, 26 sensor columns |
+| 2️⃣ | **Feature Engineering** | 48 features — rolling mean, rolling std, lag features, cycle normalization |
+| 3️⃣ | **Model Training** | RandomForest, XGBoost, LightGBM with 5-fold cross-validation |
+| 4️⃣ | **Hyperparameter Tuning** | Optuna Bayesian optimization — 50 trials |
+| 5️⃣ | **Experiment Tracking** | MLflow — params, metrics, model artifacts logged |
+| 6️⃣ | **REST API** | FastAPI — `/predict` single engine, `/predict/batch` fleet |
+| 7️⃣ | **Data Warehouse** | Snowflake — real-time prediction logging and audit trail |
+| 8️⃣ | **Dashboard** | Streamlit — single prediction, fleet analysis, Snowflake history |
 
 ## 🛠️ Tech Stack
 
@@ -86,14 +80,18 @@ conda activate pred-maintenance
 pip install -r requirements.txt
 ```
 
-Create `.env`:
-GROQ_API_KEY=your_key
-SNOWFLAKE_ACCOUNT=your_account
-SNOWFLAKE_USER=your_user
-SNOWFLAKE_PASSWORD=your_password
-SNOWFLAKE_DATABASE=PREDICTIVE_MAINTENANCE
-SNOWFLAKE_SCHEMA=ML_PIPELINE
-SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+Create a `.env` file in the root folder with the following variables:
+
+| Variable | Description |
+|---|---|
+| `SNOWFLAKE_ACCOUNT` | Your Snowflake account identifier |
+| `SNOWFLAKE_USER` | Your Snowflake username |
+| `SNOWFLAKE_PASSWORD` | Your Snowflake password |
+| `SNOWFLAKE_DATABASE` | `PREDICTIVE_MAINTENANCE` |
+| `SNOWFLAKE_SCHEMA` | `ML_PIPELINE` |
+| `SNOWFLAKE_WAREHOUSE` | `COMPUTE_WH` |
+
+> ⚠️ Never commit your `.env` file — it is already in `.gitignore`
 
 Run:
 ```bash
