@@ -18,7 +18,7 @@ RUN mkdir -p data/raw data/processed models logs
 
 EXPOSE 7860
 
-RUN echo '#!/bin/bash\nuvicorn api.main:app --host 0.0.0.0 --port 8000 &\nstreamlit run dashboard/app.py --server.port 7860 --server.address 0.0.0.0' > /app/start.sh
+RUN echo '#!/bin/bash\npython setup.py\nuvicorn api.main:app --host 0.0.0.0 --port 8000 &\nstreamlit run dashboard/app.py --server.port 7860 --server.address 0.0.0.0' > /app/start.sh
 RUN chmod +x /app/start.sh
 
 CMD ["/app/start.sh"]

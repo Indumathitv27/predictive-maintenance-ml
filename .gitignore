@@ -1,8 +1,13 @@
 __pycache__/
 *.pyc
 .env
-data/raw/
 logs/
 mlruns/
 *.csv
 .DS_Store
+mlflow.db
+models/best_model.pkl
+models/best_params.pkl
+models/scaler.pkl
+models/feature_cols.pkl
+*.db
