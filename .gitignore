@@ -11,3 +11,4 @@ models/best_params.pkl
 models/scaler.pkl
 models/feature_cols.pkl
 *.db
+data/processed/
